@@ -17,26 +17,39 @@ struct SMenuOptions {
 const SMenuOptions MenuOptionList[]{
 	{1, "Display all players"},
 	{2, "Search for player"},
-	{3, "Add new player"},
+	{3, "Search for team"},
+	{4, "Add new player"},
 	{0, "Exit program"}
 };
 
+
+// Utility functions
 void ClearInputBuffer();
+void getPositiveIntegerInput(uint32_t& input);
+std::string toLower(std::string str);
+
+// Primary functions
 void MenuHeader();
 void MenuOptions();
 int HandleMenuOption();
 void DisplayScoreboard();
 void SearchPlayerName();
+void SearchForTeam(const std::string& teamName);
 std::vector<Player> GetPlayers();
-void EmplacePlayer(const std::vector<Player>&);
 Player CreateReplacementPlayer(const std::string& name);
+void EmplacePlayer(const std::vector<Player>& players);
 void AddPlayer();
-void isValidPositiveNumber(int& input);
 
 int main()
 {
-	MenuHeader();
-	MenuOptions();
+	while (true) {
+		MenuHeader();
+		MenuOptions();
+		int result = HandleMenuOption();
+		if (result == 0)
+			break;
+	}
+	return 0;
 }
 
 void ClearInputBuffer()
@@ -45,13 +58,22 @@ void ClearInputBuffer()
 	std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
 
-void isValidPositiveNumber(int& input)
+void getPositiveIntegerInput(uint32_t& input)
 {
-	while (!(std::cin >> input) || input < 0)
+	int signedInput;
+	while (!(std::cin >> signedInput) || signedInput < 0)
 	{
-		std::cin.clear();
 		ClearInputBuffer();
+		std::cout << "Please enter a number higher or equal to 0" << '\n';
 	}
+	input = static_cast<uint32_t>(signedInput);
+}
+
+std::string toLower(std::string str) {
+	std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
+		return std::tolower(c);
+		});
+	return str;
 }
 
 void MenuHeader()
@@ -68,64 +90,77 @@ void MenuOptions()
 	{
 		std::cout << option.index << ". " << option.text << '\n';
 	}
-	HandleMenuOption();
 }
 
 int HandleMenuOption()
 {
 	std::cout << "Choose an option: ";
 	int option = -1;
-	while (!(std::cin >> option) || (option < 0 || option > 3))
+	while (!(std::cin >> option) || (option < 0 || option > std::size(MenuOptionList)))
 	{
-		std::cin.clear();
-		std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+		ClearInputBuffer();
 		std::cout << "Invalid input, please select an option from the menu." << '\n';
 	}
 	system("cls");
 	switch (option)
 	{
 	case 1:
+	{
 		DisplayScoreboard();
-
 		break;
+	}
 	case 2:
+	{
 		SearchPlayerName();
 		break;
-	case 3:
+	}
+	case 3: 
+	{
+		std::string teamName;
+		std::cout << "Enter team name to search: ";
+		std::cin >> teamName;
+		SearchForTeam(teamName);
+		break;
+	}
+	case 4:
+	{
 		AddPlayer();
 		break;
-	case 0:
+	}
+	case 0: 
+	{
 		std::cout << "Exiting program..." << '\n';
 		return 0;
 		break;
+	}
 	default:
+	{
 		std::cout << "Invalid selection. Please enter a number listed from the menu" << '\n';
 		break;
-		HandleMenuOption();
+	}
 	}
 }
 
 void DisplayScoreboard()
 {
-	std::ifstream data{ kFileName };
-	if (!data.is_open())
-	{
-		std::cout << "Error opening file " << kFileName << '\n';
-		MenuOptions();
+	std::vector<Player> players = GetPlayers();
+	std::sort(players.begin(), players.end(), [](const Player& a, const Player& b) {
+		return a.name < b.name;
+		});
+
+	std::cout << std::setw(20) << std::left << "Name"
+		<< std::setw(20) << std::left << "Team"
+		<< std::setw(20) << std::left << "Goals Scored"
+		<< std::setw(20) << std::left << "Yellow Cards"
+		<< std::setw(20) << std::left << "Red Cards" << '\n';
+
+	for (const auto& player : players) {
+		std::cout << std::setw(20) << std::left << player.name
+			<< std::setw(20) << std::left << player.team
+			<< std::setw(20) << std::left << player.goals_scored
+			<< std::setw(20) << std::left << player.num_yellow_cards
+			<< std::setw(20) << std::left << player.num_red_cards << '\n';
 	}
-	std::string line;
-	while (std::getline(data, line))
-	{
-		std::stringstream lineStream(line);
-		std::string cell;
-		while (std::getline(lineStream, cell, ','))
-		{
-			std::cout << std::setw(20) << std::left << cell << '\t';
-		}
-		std::cout << '\n';
-	}
-	data.close();
-	MenuOptions();
 }
 
 void SearchPlayerName()
@@ -144,24 +179,38 @@ void SearchPlayerName()
 		}
 	}
 	EmplacePlayer(players);
-	MenuOptions();
 }
 
-Player CreateReplacementPlayer(const std::string& name) {
-	Player replacementPlayer;
+void SearchForTeam(const std::string& teamName) {
+	std::vector<Player> players = GetPlayers();
+	bool foundTeam = false;
 
-	std::cout << "Enter new team for " << name << ": ";
-	std::getline(std::cin, replacementPlayer.team);
-	std::cout << "Enter new goals scored for " << name << ": ";
-	std::cin >> replacementPlayer.goals_scored;
-	std::cout << "Enter new number of yellow cards for " << name << ": ";
-	std::cin >> replacementPlayer.num_yellow_cards;
-	std::cout << "Enter new number of red cards for " << name << ": ";
-	std::cin >> replacementPlayer.num_red_cards;
+	std::string teamNameLower = toLower(teamName);
 
-	replacementPlayer.name = name;
+	for (const auto& player : players) {
+		std::string playerTeamLower = toLower(player.team);
+		if (playerTeamLower == teamNameLower) {
+			if (!foundTeam) {
+				std::cout << "Players under " << teamName << " team:\n";
+				std::cout << std::setw(20) << std::left << "Name" 
+					<< std::setw(20) << std::left << "Team" 
+					<< std::setw(20) << std::left << "Goals Scored" 
+					<< std::setw(20) << std::left << "Yellow Cards" 
+					<< std::setw(20) << std::left << "Red Cards\n";
+				foundTeam = true;
+			}
 
-	return replacementPlayer;
+			std::cout << std::setw(20) << std::left << player.name
+				<< std::setw(20) << std::left << player.team
+				<< std::setw(20) << std::left << player.goals_scored
+				<< std::setw(20) << std::left << player.num_yellow_cards
+				<< std::setw(20) << std::left << player.num_red_cards << '\n';
+		}
+	}
+
+	if (!foundTeam) {
+		std::cout << "No players found under " << teamName << " team\n";
+	}
 }
 
 std::vector<Player> GetPlayers()
@@ -191,6 +240,26 @@ std::vector<Player> GetPlayers()
 		}
 	}
 	return players;
+}
+
+Player CreateReplacementPlayer(const std::string& name) {
+	Player replacementPlayer;
+
+	replacementPlayer.name = name;
+
+	std::cout << "Enter new team for " << name << ": ";
+	std::getline(std::cin, replacementPlayer.team);
+
+	std::cout << "Enter new goals scored for " << name << ": ";
+	getPositiveIntegerInput(replacementPlayer.goals_scored);
+
+	std::cout << "Enter new number of yellow cards for " << name << ": ";
+	getPositiveIntegerInput(replacementPlayer.num_yellow_cards);
+
+	std::cout << "Enter new number of red cards for " << name << ": ";
+	getPositiveIntegerInput(replacementPlayer.num_red_cards);
+
+	return replacementPlayer;
 }
 
 void EmplacePlayer(const std::vector<Player>& players)
@@ -260,12 +329,13 @@ void AddPlayer()
 	std::getline(std::cin, newPlayer.team);
 
 	std::cout << "Enter number of goals scored: ";
-	std::cin >> newPlayer.goals_scored;
+	getPositiveIntegerInput(newPlayer.goals_scored);
+
 	std::cout << "Enter number of yellow cards: ";
-	std::cin >> newPlayer.num_yellow_cards;
+	getPositiveIntegerInput(newPlayer.num_yellow_cards);
 
 	std::cout << "Enter number of red cards: ";
-	std::cin >> newPlayer.num_red_cards;
+	getPositiveIntegerInput(newPlayer.num_red_cards);
 
 	for (auto it = players.begin(); it != players.end(); it++) {
 		if (it->name == newPlayer.name && it->team == newPlayer.team) {
@@ -283,8 +353,5 @@ void AddPlayer()
 		}
 	}
 	players.push_back(newPlayer);
-
 	EmplacePlayer(players);
-
-	MenuOptions();
 }
